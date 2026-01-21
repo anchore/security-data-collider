@@ -4,4 +4,4 @@
 
 # vulnerability-indexer
 
-Takes various vulnerability data sources as input and creates a single unified view per Anchore security identifier using various heuristics to select the best available data
+Takes various vulnerability data sources as input and renders a single unified view per Anchore security identifier using various heuristics to select the best available data
