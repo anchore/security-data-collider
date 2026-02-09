@@ -19,6 +19,7 @@ contents
 .wily/
 .cache/
 /.tmp/
+data/
 
 # release related
 CHANGELOG.md
