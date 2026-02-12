@@ -1,0 +1,31 @@
+name: "Validations"
+on:
+  # needed for publishing commit images on the main branch
+  push:
+    branches:
+      - main
+
+  # needed when running from forks
+  pull_request:
+
+permissions:
+  contents: read
+
+jobs:
+  validate:
+    name: "Validate"
+    runs-on: ubuntu-latest
+    container:
+      image: python:3.13-alpine
+    permissions:
+      contents: read
+    steps:
+      - name: Install OS dependencies
+        run: apk add --no-cache uv git
+      - name: Configure git
+        run: git config --global --add safe.directory "$GITHUB_WORKSPACE"
+      - uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd #v6.0.2
+        with:
+          persist-credentials: false
+      - name: ruff check
+        run: uv run ruff check
