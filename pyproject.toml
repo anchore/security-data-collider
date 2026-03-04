@@ -50,6 +50,7 @@ style = "semver"
 
 [tool.uv]
 trusted-publishing = "always"
+exclude-newer = "1 week"
 
 [[tool.uv.index]]
 explicit = true
