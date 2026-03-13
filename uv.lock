@@ -3,7 +3,7 @@ revision = 3
 requires-python = "==3.14.*"
 
 [options]
-exclude-newer = "2026-02-25T12:04:03.19458Z"
+exclude-newer = "2026-03-06T17:35:42.713013Z"
 exclude-newer-span = "P1W"
 
 [[package]]
@@ -15,6 +15,7 @@ dependencies = [
     { name = "jsonschema-rs" },
     { name = "oras" },
     { name = "orjson" },
+    { name = "packaging" },
     { name = "pydantic" },
     { name = "python-dateutil" },
     { name = "pyyaml" },
@@ -53,6 +54,7 @@ requires-dist = [
     { name = "jsonschema-rs", specifier = ">=0.40.4" },
     { name = "oras", specifier = ">=0.2.38" },
     { name = "orjson", specifier = ">=3.11.4" },
+    { name = "packaging", specifier = ">=26.0" },
     { name = "pydantic", specifier = ">=2.12.5" },
     { name = "python-dateutil", specifier = ">=2.8.2,<3.0.0" },
     { name = "pyyaml", specifier = ">=6.0.3" },
