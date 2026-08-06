@@ -1,3 +1,7 @@
+data
+build
+snapshots
+
 # tools
 .mise.toml
 .tool/
