@@ -1,0 +1,21 @@
+from __future__ import annotations
+
+import os
+from dataclasses import dataclass, field
+
+prefix = "ANCHORE_SECURITY_DATA_COLLIDER"
+
+
+@dataclass
+class Log:
+    slim: bool = os.environ.get(f"{prefix}_LOG_SLIM", default="false") == "true"
+    level: str = os.environ.get(f"{prefix}_LOG_LEVEL", default="INFO")
+    show_timestamp: bool = os.environ.get(f"{prefix}_LOG_SHOW_TIMESTAMP", default="true") == "true"
+    show_level: bool = os.environ.get(f"{prefix}_LOG_SHOW_LEVEL", default="true") == "true"
+
+    def __post_init__(self) -> None:
+        self.level = self.level.upper()
+
+@dataclass
+class Application:
+    log: Log = field(default_factory=Log)
