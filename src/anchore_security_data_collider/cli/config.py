@@ -3,6 +3,8 @@ from __future__ import annotations
 import os
 from dataclasses import dataclass, field
 
+from appdirs import user_state_dir
+
 prefix = "ANCHORE_SECURITY_DATA_COLLIDER"
 
 
@@ -19,3 +21,4 @@ class Log:
 @dataclass
 class Application:
     log: Log = field(default_factory=Log)
+    state_dir: str = user_state_dir(appname="anchore-security-data-collider", appauthor="anchore")
