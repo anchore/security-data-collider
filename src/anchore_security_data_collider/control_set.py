@@ -85,6 +85,14 @@ class ControlSetGenerator:
                 },
             }
 
+            rejected_reasons = cna.get("rejectedReasons")
+            if rejected_reasons:
+                fragments["containers"]["cna"]["rejectedReasons"] = rejected_reasons
+
+            replaced_by = cna.get("replacedBy")
+            if replaced_by:
+                fragments["containers"]["cna"]["replacedBy"] = replaced_by
+
             fragment_dir = os.path.join(self._get_security_identifier_base_path(anchore_id), "cve5")
             os.makedirs(fragment_dir, exist_ok=True)
             fragment_path = os.path.join(fragment_dir, f"{cve_id}.json")
