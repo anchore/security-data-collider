@@ -2,6 +2,7 @@ import logging
 import os
 import shutil
 import tarfile
+import tempfile
 import threading
 from dataclasses import dataclass
 from typing import TYPE_CHECKING
@@ -40,17 +41,20 @@ class _StoreThreadLocal(threading.local):
     conn: Connection | None = None
 
 class SecurityIdentifiersStore:
-    def __init__(self, root: str, config: SecurityIdentifiersStoreConfig):
+    def __init__(self, state_dir: str, config: SecurityIdentifiersStoreConfig):
         self._name = "security-identifiers"
-        self._root = root
         self._config = config
         self._logger = logging.getLogger(self._name)
-        self._store_path = os.path.join(self._root, "inputs", self._name, f"{self._name}.db")
+        self._store_path = os.path.join(state_dir, "inputs", self._name, f"{self._name}.db")
         self._thread_local_store = _StoreThreadLocal()
 
     @property
     def name(self) -> str:
         return self._name
+
+    @property
+    def path(self) -> str:
+        return self._store_path
 
     def _store(self) -> Connection:
         if self._thread_local_store.conn is None:
@@ -64,7 +68,8 @@ class SecurityIdentifiersStore:
     def fetch(self, environment: DeploymentEnvironment):
         self._logger.debug(f"{self._name}: Start fetch")
         pull_string = self._config.pull_string(environment)
-        download_path = os.path.join(self._root, "downloads", self._name)
+        temp_dl = tempfile.TemporaryDirectory()
+        download_path = os.path.join(temp_dl.name, "downloads", self._name)
         extracted_paths = []
         with timer(f"{self._name}: Fetching from {pull_string}", logger=self._logger):
             with timer(f"{self._name}: Downloading from {pull_string} to {download_path}", logger=self._logger):
@@ -76,7 +81,7 @@ class SecurityIdentifiersStore:
                 client = OrasClient()
                 extracted_paths = client.pull(target=pull_string, outdir=download_path)
 
-            dest = os.path.join(self._root, "inputs", self._name)
+            dest = os.path.dirname(self._store_path)
             with timer(f"{self._name}: Extracting content to {dest}", logger=self._logger):
                 if os.path.exists(dest):
                     shutil.rmtree(dest)
@@ -96,8 +101,8 @@ class SecurityIdentifiersStore:
                         else:
                             stream.extractall(dest, filter="data")
 
-            with timer(f"{self._name}: Cleaning up {download_path}", logger=self._logger):
-                shutil.rmtree(download_path)
+            with timer(f"{self._name}: Cleaning up {temp_dl.name}", logger=self._logger):
+                shutil.rmtree(temp_dl.name)
         self._logger.debug(f"{self._name}: Finish fetch")
 
     def _lookup(self, record_id: str) -> AnchoreId | None:

@@ -2,7 +2,6 @@ import json
 import logging
 import os
 import shutil
-import tempfile
 from dataclasses import dataclass
 from glob import iglob
 from typing import TYPE_CHECKING
@@ -11,33 +10,31 @@ from anchore_security_data_collider.identifiers.store import SecurityIdentifiers
 from anchore_security_data_collider.utils import execute_command, timer
 
 if TYPE_CHECKING:
-    from anchore_security_data_collider.deployment import DeploymentEnvironment
     from anchore_security_data_collider.identifiers.anchore_id import AnchoreId
+    from anchore_security_data_collider.snapshot.config import SnapshotConfig
 
-
-@dataclass(frozen=True, slots=True)
-class CVE5SnapshotConfig:
-    repo_root: str
 
 @dataclass(frozen=True, slots=True)
 class ControlSetGeneratorConfig:
+    state_dir: str
     repo_root: str
-    cve5: CVE5SnapshotConfig
-    environment: DeploymentEnvironment
+    cve5: SnapshotConfig
 
 class ControlSetGenerator:
     def __init__(self, config: ControlSetGeneratorConfig):
         self._logger = logging.getLogger("control-set-generator")
         self._config = config
-        self._security_identifiers_root = tempfile.TemporaryDirectory()
         self._security_identifiers = SecurityIdentifiersStore(
-                root=self._security_identifiers_root.name,
-                config=SecurityIdentifiersStoreConfig(
-                    pull_format_string="ghcr.io/anchore/data/{environment}/security-identifiers/sqlite/v0:latest",
-                ),
-            )
+            config.state_dir,
+            config=SecurityIdentifiersStoreConfig(
+                pull_format_string="ghcr.io/anchore/data/{environment}/security-identifiers/sqlite/v0:latest",
+            ),
+        )
 
     def _ready(self) -> bool:
+        if not self._security_identifiers.ready():
+            return False
+
         if not os.path.exists(self._config.repo_root):
             return False
 
@@ -106,7 +103,6 @@ class ControlSetGenerator:
             raise ValueError("Input data is not ready")
 
         with timer("generating collider control set"):
-            self._security_identifiers.fetch(self._config.environment)
             control_set_data_path = os.path.join(self._config.repo_root, "data")
             if os.path.exists(control_set_data_path):
                 shutil.rmtree(control_set_data_path)
