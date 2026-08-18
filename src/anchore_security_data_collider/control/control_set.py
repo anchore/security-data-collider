@@ -57,6 +57,12 @@ class ControlSetGenerator:
                 self._logger.warning(f"Skipping {cve_file} due to missing cveMetadata")
                 continue
 
+            # Exclude the update date to avoid unnecessary changes to every record
+            # since we only care about tracking a small subset of properties from the upstream
+            # record
+            if "dateUpdated" in cve_metadata:
+                del cve_metadata["dateUpdated"]
+
             cve_id = cve_metadata.get("cveId")
             if not cve_id:
                 self._logger.warning(f"Skipping {cve_file} due to missing cveId")
