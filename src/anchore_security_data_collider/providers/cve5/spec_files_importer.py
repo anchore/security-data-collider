@@ -5,16 +5,13 @@ import tomllib
 from copy import deepcopy
 from dataclasses import dataclass
 from glob import iglob
-from typing import TYPE_CHECKING, Any
+from typing import Any
 from urllib.parse import quote
 
 from packaging.utils import canonicalize_name
 
-from anchore_security_data_collider.identifiers.store import SecurityIdentifiersStore, SecurityIdentifiersStoreConfig
+from anchore_security_data_collider.providers.cve5.identifier import parse_identifier
 from anchore_security_data_collider.utils import timer
-
-if TYPE_CHECKING:
-    from anchore_security_data_collider.identifiers.anchore_id import AnchoreId
 
 # CNAs that will have data that isn't currently worth trying to automate imports
 # Will currently print out a warning with the proposed change instead
@@ -24,8 +21,7 @@ manually_reconciled_cnas: set[str] = {
 
 @dataclass(frozen=True, slots=True)
 class SpecFilesImporterConfig:
-    state_dir: str
-    repo_root: str
+    enriched_repo_root: str
     spec_files_repo_root: str
 
 @dataclass(frozen=False, slots=True)
@@ -50,42 +46,27 @@ class SpecFilesImporter:
     def __init__(self, config: SpecFilesImporterConfig):
         self._logger = logging.getLogger("spec-files-importer")
         self._config = config
-        self._security_identifiers = SecurityIdentifiersStore(
-            state_dir=config.state_dir,
-            config=SecurityIdentifiersStoreConfig(
-                pull_format_string="ghcr.io/anchore/data/{environment}/security-identifiers/sqlite/v0:latest",
-            ),
-        )
+        self._data_path = os.path.join(self._config.enriched_repo_root, "data")
 
     def _ready(self) -> bool:
-        if not self._security_identifiers.ready():
-            return False
-
-        if not os.path.exists(self._config.repo_root):
+        if not os.path.exists(self._config.enriched_repo_root):
             return False
 
         return os.path.exists(self._config.spec_files_repo_root)
 
-    def _get_security_identifier_base_path(self, anchore_id: AnchoreId) -> str:
-        return os.path.join(self._config.repo_root, "data", str(anchore_id.year), str(anchore_id.index//1000), str(anchore_id))
+    def _process_nvd_spec(self, spec_path: str, nvd_spec: Any) -> bool:  # noqa: C901, PLR0911, PLR0912, PLR0915
+        cve_id_string = nvd_spec.get("id")
+        if not cve_id_string:
+            return False
 
-    def _get_cve_file_path(self, anchore_id: AnchoreId, cve_id: str) -> str:
-        base_path = self._get_security_identifier_base_path(anchore_id)
-        return os.path.join(base_path, "cve5", f"{cve_id}.json")
-
-    def _process_nvd_spec(self, nvd_spec: Any) -> bool:  # noqa: C901, PLR0911, PLR0912, PLR0915
-        cve_id = nvd_spec.get("id")
+        cve_id = parse_identifier(cve_id_string)
         if not cve_id:
+            self._logger.warning(f"Skipping {cve_id_string} in {spec_path} due to error while parsing identifier")
             return False
 
-        anchore_id = self._security_identifiers.lookup(cve_id)
-        if not anchore_id:
-            self._logger.warning(f"Skipping because no ANCHORE- id found for {cve_id}")
-            return False
-
-        cve5_fragment_path = self._get_cve_file_path(anchore_id, cve_id)
+        cve5_fragment_path = cve_id.filename(self._data_path)
         if not os.path.exists(cve5_fragment_path):
-            self._logger.warning(f"{anchore_id}: Skipping because no base fragment found at {cve5_fragment_path}.  Ensure you have synced the control data first and merged to the enriched dataset")
+            self._logger.warning(f"{cve_id!s}: Skipping because no base fragment found at {cve5_fragment_path}.  Ensure you have synced the control data first and merged to the enriched dataset")
             return False
 
         with open(cve5_fragment_path) as fp:
@@ -93,16 +74,18 @@ class SpecFilesImporter:
 
         cve_metadata = original_cve_record.get("cveMetadata")
         if not cve_metadata:
-            self._logger.warning(f"{anchore_id}: Skipping because no cveMetadata section found at {cve5_fragment_path}")
+            self._logger.warning(f"{cve_id!s}: Skipping because no cveMetadata section found at {cve5_fragment_path}")
+            return False
 
         cna: str = cve_metadata.get("assignerShortName")
         if not cna:
-            self._logger.warning(f"{anchore_id}: Skipping because assignerShortName not present in cveMetadata section for {cve5_fragment_path}")
+            self._logger.warning(f"{cve_id!s}: Skipping because assignerShortName not present in cveMetadata section for {cve5_fragment_path}")
+            return False
 
         revised_cve_record = deepcopy(original_cve_record)
         cna_container = revised_cve_record.get("containers", {}).get("cna")
         if not cna_container:
-            self._logger.warning(f"{anchore_id}: Skipping because no cna container section found for {cve_id}")
+            self._logger.warning(f"{cve_id!s}: Skipping because no cna container section found for {cve5_fragment_path}")
             return False
 
         # TODO: Figure out if there is a place for the disputed reasons per vendor
@@ -190,20 +173,20 @@ class SpecFilesImporter:
                         #         p["collectionURL"] = repository_url
                         #     p["packageName"] = f"{group_id}:{artifact_id}"
                         #     p["packageURL"] = f"pkg:maven/{group_id}/{artifact_id}?repository_url={quote(repository_url)}"
-                        # case "maven":
-                        #     group_id = r.get("group_id")
-                        #     if not group_id:
-                        #         self._logger.warning(f"Unable to import from {cve_id} due to missing group_id")
-                        #         return False
-                        #     artifact_id = r.get("artifact_id")
-                        #     if not artifact_id:
-                        #         self._logger.warning(f"Unable to import from {cve_id} due to missing artifact_id")
-                        #         return False
-                        #     if not collection_url or collection_url.startswith("https://repo.maven.apache.org/maven2"):
-                        #         p["packageURL"] = f"pkg:maven/{group_id}/{artifact_id}"
-                        #     else:
-                        #         p["packageURL"] = f"pkg:maven/{group_id}/{artifact_id}?repository_url={quote(collection_url)}"
-                        #     p["packageName"] = f"{group_id}:{artifact_id}"
+                        case "maven":
+                            group_id = r.get("group_id")
+                            if not group_id:
+                                self._logger.warning(f"Unable to import from {cve_id} due to missing group_id")
+                                return False
+                            artifact_id = r.get("artifact_id")
+                            if not artifact_id:
+                                self._logger.warning(f"Unable to import from {cve_id} due to missing artifact_id")
+                                return False
+                            if not collection_url or collection_url.startswith("https://repo.maven.apache.org/maven2"):
+                                p["packageURL"] = f"pkg:maven/{group_id}/{artifact_id}"
+                            else:
+                                p["packageURL"] = f"pkg:maven/{group_id}/{artifact_id}?repository_url={quote(collection_url)}"
+                            p["packageName"] = f"{group_id}:{artifact_id}"
                         case "npm":
                             package_name = r.get("package_name")
                             if not package_name:
@@ -219,7 +202,6 @@ class SpecFilesImporter:
                             else:
                                 p["packageURL"] = f"pkg:npm/{purl_package_name}?repository_url={quote(collection_url)}"
                                 p["collectionURL"] = collection_url
-
                             p["packageName"] = package_name
                         case "python":
                             package_name = r.get("package_name")
@@ -464,7 +446,7 @@ class SpecFilesImporter:
             return False
 
         if cna in manually_reconciled_cnas:
-            self._logger.warning(f"{anchore_id}: Manual reconciliation needed for {cve_id}, cna: {cna}")
+            self._logger.warning(f"{cve_id!s}: Manual reconciliation needed for {cve_id}, cna: {cna}")
             self._logger.warning(json.dumps(revised_cve_record, ensure_ascii=False, indent=2, sort_keys=True))
             return False
 
@@ -489,7 +471,7 @@ class SpecFilesImporter:
 
             updated_count = 0
             for n in nvd_vuln:
-                updated = self._process_nvd_spec(n)
+                updated = self._process_nvd_spec(spec_file, n)
                 if updated:
                     updated_count += 1
 

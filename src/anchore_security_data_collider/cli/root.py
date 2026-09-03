@@ -8,7 +8,7 @@ import yaml
 
 from anchore_security_data_collider import __name__ as package_name
 from anchore_security_data_collider.cli.config import Application
-from anchore_security_data_collider.cli.data.commands import group as data_group
+from anchore_security_data_collider.cli.cve5.commands import group as cve5_group
 
 
 @click.option("--verbose", "-v", default=False, help="show logs", count=True)
@@ -96,4 +96,4 @@ def show_config(cfg: Application) -> None:
     cfg_dict = dataclasses.asdict(cfg, dict_factory=enum_asdict_factory)
     print(yaml.dump(cfg_dict, Dumper=IndentDumper, default_flow_style=False))
 
-root.add_command(cmd=data_group)
+root.add_command(cmd=cve5_group)
