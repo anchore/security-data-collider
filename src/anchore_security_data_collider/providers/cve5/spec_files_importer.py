@@ -158,21 +158,21 @@ class SpecFilesImporter:
                         p["product"] = product
 
                     match record_type:
-                        # case "jenkins-plugin":
-                        #     group_id = r.get("group_id")
-                        #     if not group_id:
-                        #         self._logger.warning(f"Unable to import from {cve_id} due to missing group_id")
-                        #         return False
-                        #     artifact_id = r.get("artifact_id")
-                        #     if not artifact_id:
-                        #         self._logger.warning(f"Unable to import from {cve_id} due to missing artifact_id")
-                        #         return False
-                        #     repository_url = collection_url
-                        #     if collection_url == "https://plugins.jenkins.io":
-                        #         repository_url = "https://repo.jenkins-ci.org/releases"
-                        #         p["collectionURL"] = repository_url
-                        #     p["packageName"] = f"{group_id}:{artifact_id}"
-                        #     p["packageURL"] = f"pkg:maven/{group_id}/{artifact_id}?repository_url={quote(repository_url)}"
+                        case "jenkins-plugin":
+                            group_id = r.get("group_id")
+                            if not group_id:
+                                self._logger.warning(f"Unable to import from {cve_id} due to missing group_id")
+                                return False
+                            artifact_id = r.get("artifact_id")
+                            if not artifact_id:
+                                self._logger.warning(f"Unable to import from {cve_id} due to missing artifact_id")
+                                return False
+                            repository_url = collection_url
+                            if collection_url == "https://plugins.jenkins.io":
+                                repository_url = "https://repo.jenkins-ci.org/releases"
+                                p["collectionURL"] = repository_url
+                            p["packageName"] = f"{group_id}:{artifact_id}"
+                            p["packageURL"] = f"pkg:maven/{group_id}/{artifact_id}?repository_url={quote(repository_url)}"
                         case "maven":
                             group_id = r.get("group_id")
                             if not group_id:
