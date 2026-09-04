@@ -323,7 +323,7 @@ class SpecFilesImporter:
                                             patch_references.add(pr)
                                         # TODO: support rendering of URLs for other sources (once we have any data populated for them)
                                         elif github_repo:
-                                            patch_references.add(f"{github_repo}/pull/{commit}")
+                                            patch_references.add(f"{github_repo}/pull/{pr}")
 
                     unaffected = r.get("unaffected", [])
                     if unaffected:
