@@ -169,7 +169,7 @@ class SpecFilesImporter:
                                 return False
                             repository_url = collection_url
                             if collection_url == "https://plugins.jenkins.io":
-                                repository_url = "https://repo.jenkins-ci.org/releases"
+                                repository_url = "https://repo.jenkins-ci.org/artifactory/releases"
                                 p["collectionURL"] = repository_url
                             p["packageName"] = f"{group_id}:{artifact_id}"
                             p["packageURL"] = f"pkg:maven/{group_id}/{artifact_id}?repository_url={quote(repository_url)}"
@@ -393,6 +393,15 @@ class SpecFilesImporter:
 
                     if versions:
                         p["versions"] = versions
+
+                    # Create the additional jenkins-plugin registry record
+                    if record_type == "jenkins-plugin":
+                        p2 = deepcopy(p)
+                        p2["collectionURL"] = r["registry"]
+                        p2["packageName"] = r["plugin_name"]
+                        if "packageURL" in p2:
+                            del p2["packageURL"]
+                        cve5_affected.append(p2)
 
         for patch_ref in patch_references:
             cve5_references.append(
