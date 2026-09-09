@@ -220,6 +220,22 @@ class SpecFilesImporter:
                                 p["collectionURL"] = collection_url
 
                             p["packageName"] = package_name
+                        case "vscode-extension":
+                            publisher = r["publisher"]
+                            extension_name = r["extension_name"]
+                            collection_url = r["collection_url"]
+
+                            if not collection_url or "://marketplace.visualstudio.com" in collection_url:
+                                p["packageURL"] = f"pkg:vscode-extension/{publisher}/{extension_name}"
+
+                                if collection_url:
+                                    p["collectionURL"] = collection_url
+                            else:
+                                p["packageURL"] = f"pkg:vscode-extension/{publisher}/{extension_name}?repository_url={quote(collection_url)}"
+                                p["collectionURL"] = collection_url
+
+                            p["packageName"] = f"{publisher}.{extension_name}"
+                            p["collectionURL"] = r["collection_url"]
                         case _:
                             # TODO: Handle other package types
                             return False
