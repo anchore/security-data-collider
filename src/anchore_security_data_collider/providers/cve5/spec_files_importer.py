@@ -158,21 +158,21 @@ class SpecFilesImporter:
                         p["product"] = product
 
                     match record_type:
-                        # case "jenkins-plugin":
-                        #     group_id = r.get("group_id")
-                        #     if not group_id:
-                        #         self._logger.warning(f"Unable to import from {cve_id} due to missing group_id")
-                        #         return False
-                        #     artifact_id = r.get("artifact_id")
-                        #     if not artifact_id:
-                        #         self._logger.warning(f"Unable to import from {cve_id} due to missing artifact_id")
-                        #         return False
-                        #     repository_url = collection_url
-                        #     if collection_url == "https://plugins.jenkins.io":
-                        #         repository_url = "https://repo.jenkins-ci.org/releases"
-                        #         p["collectionURL"] = repository_url
-                        #     p["packageName"] = f"{group_id}:{artifact_id}"
-                        #     p["packageURL"] = f"pkg:maven/{group_id}/{artifact_id}?repository_url={quote(repository_url)}"
+                        case "jenkins-plugin":
+                            group_id = r.get("group_id")
+                            if not group_id:
+                                self._logger.warning(f"Unable to import from {cve_id} due to missing group_id")
+                                return False
+                            artifact_id = r.get("artifact_id")
+                            if not artifact_id:
+                                self._logger.warning(f"Unable to import from {cve_id} due to missing artifact_id")
+                                return False
+                            repository_url = collection_url
+                            if collection_url == "https://plugins.jenkins.io":
+                                repository_url = "https://repo.jenkins-ci.org/artifactory/releases"
+                                p["collectionURL"] = repository_url
+                            p["packageName"] = f"{group_id}:{artifact_id}"
+                            p["packageURL"] = f"pkg:maven/{group_id}/{artifact_id}?repository_url={quote(repository_url)}"
                         case "maven":
                             group_id = r.get("group_id")
                             if not group_id:
@@ -220,6 +220,22 @@ class SpecFilesImporter:
                                 p["collectionURL"] = collection_url
 
                             p["packageName"] = package_name
+                        case "vscode-extension":
+                            publisher = r["publisher"]
+                            extension_name = r["extension_name"]
+                            collection_url = r["collection_url"]
+
+                            if not collection_url or "://marketplace.visualstudio.com" in collection_url:
+                                p["packageURL"] = f"pkg:vscode-extension/{publisher}/{extension_name}"
+
+                                if collection_url:
+                                    p["collectionURL"] = collection_url
+                            else:
+                                p["packageURL"] = f"pkg:vscode-extension/{publisher}/{extension_name}?repository_url={quote(collection_url)}"
+                                p["collectionURL"] = collection_url
+
+                            p["packageName"] = f"{publisher}.{extension_name}"
+                            p["collectionURL"] = r["collection_url"]
                         case _:
                             # TODO: Handle other package types
                             return False
@@ -393,6 +409,15 @@ class SpecFilesImporter:
 
                     if versions:
                         p["versions"] = versions
+
+                    # Create the additional jenkins-plugin registry record
+                    if record_type == "jenkins-plugin":
+                        p2 = deepcopy(p)
+                        p2["collectionURL"] = r["registry"]
+                        p2["packageName"] = r["plugin_name"]
+                        if "packageURL" in p2:
+                            del p2["packageURL"]
+                        cve5_affected.append(p2)
 
         for patch_ref in patch_references:
             cve5_references.append(
