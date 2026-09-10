@@ -308,6 +308,9 @@ class SpecFilesImporter:
                             if (less_than_or_equal or less_than) and not start_inclusive:
                                 v["version"] = "0"
 
+                            if start_inclusive and not less_than_or_equal and not less_than:
+                                v["lessThanOrEqual"] = "*"
+
                             if scheme:
                                 v["versionType"] = scheme
 
@@ -369,6 +372,9 @@ class SpecFilesImporter:
                             if (less_than_or_equal or less_than) and not start_inclusive:
                                 v["version"] = "0"
 
+                            if start_inclusive and not less_than_or_equal and not less_than:
+                                v["lessThanOrEqual"] = "*"
+
                             if scheme:
                                 v["versionType"] = scheme
 
@@ -401,6 +407,9 @@ class SpecFilesImporter:
 
                             if (less_than_or_equal or less_than) and not start_inclusive:
                                 v["version"] = "0"
+
+                            if start_inclusive and not less_than_or_equal and not less_than:
+                                v["lessThanOrEqual"] = "*"
 
                             if scheme:
                                 v["versionType"] = scheme
