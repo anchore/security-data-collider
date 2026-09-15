@@ -21,7 +21,7 @@ def strip(value: str | None) -> str | None:
         if value.endswith(suffix):
             value = strip(value.removesuffix(suffix))
 
-    if "," not in value and " and " not in value:
+    if "," not in value and " and " not in value.lower():
         if value.startswith("[") and value.endswith("]"):
             value = strip(value.strip("[]"))
 
@@ -38,7 +38,7 @@ def is_unknown(value: str | None) -> bool:
     if not value:
         return True
 
-    v = strip(value.lower())
+    v = strip(value).lower()
 
     if not v:
         return True
@@ -53,4 +53,4 @@ def is_unknown(value: str | None) -> bool:
 def normalize(value: str | None) -> str | None:
     if is_unknown(value):
         return None
-    return strip(value.lower())
+    return strip(value)

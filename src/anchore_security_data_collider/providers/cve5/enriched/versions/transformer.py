@@ -11,19 +11,88 @@ from anchore_security_data_collider.providers.cve5.enriched.normalization import
 from anchore_security_data_collider.utils import timer
 
 ALL_VERSIONS: str = "*"
+VERSION_ALLOWED_PATTERN = r"[a-zA-Z0-9_+\.\-\s\*\(\)\#\~]"
+VERSION_ALLOWED_REGEX = re.compile(
+    rf"^{VERSION_ALLOWED_PATTERN}+$",
+    re.IGNORECASE,
+)
+VERSION_EQ_PREFIX = re.compile(
+    rf"^\s*(\=+\s*|equals?\s+)(?P<eq>{VERSION_ALLOWED_PATTERN}+?)\s*$",
+    re.IGNORECASE,
+)
+VERSION_GTE_PREFIX = re.compile(
+    rf"^\s*(\>\=\s*|((all?\s+)?versions?\s+)?greater\s+than\s+or\s+equal\s+)(?P<gte>{VERSION_ALLOWED_PATTERN}+?)\s*$",
+    re.IGNORECASE,
+)
+VERSION_LTE_PREFIX = re.compile(
+    rf"^\s*(\<\=\s*|((all?\s+)?versions?\s+)?less\s+than\s+or\s+equal\s+)(?P<lte>{VERSION_ALLOWED_PATTERN}+?)\s*$",
+    re.IGNORECASE,
+)
+VERSION_LTE_SUFFIX = re.compile(
+    rf"^\s*(?P<lte>{VERSION_ALLOWED_PATTERN}+?)\s+and\s+earlier\s*$",
+    re.IGNORECASE,
+)
+VERSION_LT_PREFIX = re.compile(
+    rf"^\s*(\<\s*|((all?\s+)?versions?\s+)?(less\s+than\s+|prior\s+to\s+|up\s+to\s+(cuda\s+toolkit\s+)?))(?P<lt>{VERSION_ALLOWED_PATTERN}+?)\s*$",
+    re.IGNORECASE,
+)
+VERSION_PREFIX = re.compile(
+    rf"^(version|ver\.?)\s+(?P<suffix>{VERSION_ALLOWED_PATTERN}+?)\s*$",
+    re.IGNORECASE,
+)
 
 def clean_version(version: str | None) -> str | None:
     if not version:
         return version
 
-    version = version.lower().removeprefix("version").strip()
-    version = version.lstrip("=").strip()
-    version = version.removeprefix("version ").removeprefix("ver ").removeprefix("ver.").removeprefix("v").strip()
+    m = VERSION_PREFIX.match(version)
+    if m:
+        version = m.group("suffix").strip()
+
+    version = version.removeprefix("= ")
+    version = version.removeprefix(">= ")
+    version = version.removeprefix("<= ")
+    version = version.removeprefix("< ")
+    version = version.strip()
 
     if version == "0.0":
         version = "0"
 
     return version
+
+def normalize_version_constraint_chunk(constraint: str) -> str | None:  # noqa: C901
+    constraint = normalize(constraint)
+    if not constraint:
+        return None
+
+    m = VERSION_EQ_PREFIX.match(constraint)
+    if m:
+        version = clean_version(normalize(m.group("eq")))
+        if version:
+            return f"= {version}"
+
+    m = VERSION_GTE_PREFIX.match(constraint)
+    if m:
+        version = clean_version(normalize(m.group("gte")))
+        if version:
+            return f">= {version}"
+
+    m = VERSION_LTE_PREFIX.match(constraint)
+    if not m:
+        m = VERSION_LTE_SUFFIX.match(constraint)
+
+    if m:
+        version = clean_version(normalize(m.group("lte")))
+        if version:
+            return f"<= {version}"
+
+    m = VERSION_LT_PREFIX.match(constraint)
+    if m:
+        version = clean_version(normalize(m.group("lt")))
+        if version:
+            return f"< {version}"
+
+    return constraint
 
 @dataclass(frozen=False, slots=True)
 class VersionQualifier:
@@ -57,19 +126,33 @@ class VersionQualifier:
         return version_scheme
 
     @classmethod
-    def parse(  # noqa: C901, PLR0912, PLR0915
+    def parse(  # noqa: C901, PLR0911, PLR0912, PLR0915
         cls,
         v: dict[str, Any],
         assigner: str | None = None,
         solutions: set[str] | None = None,
     ) -> VersionQualifier | None:
-        version = normalize(v.get("version"))
-        less_than = normalize(v.get("lessThan"))
-        less_than_or_equal = normalize(v.get("lessThanOrEqual"))
+        raw_version = v.get("version")
+        raw_less_than = v.get("lessThan")
+        raw_less_than_or_equal = v.get("lessThanOrEqual")
+
+        version = normalize(raw_version)
+        less_than = normalize(raw_less_than)
+        less_than_or_equal = normalize(raw_less_than_or_equal)
+
+        if raw_less_than and not less_than:
+            logging.warning(f"unable to handle parsing for version: {version}")
+            return None
+
+        if raw_less_than_or_equal and not less_than_or_equal:
+            logging.warning(f"unable to handle parsing for version: {version}")
+            return None
+
         version_scheme = VersionQualifier.parse_version_scheme(v, assigner)
 
         # TODO: for now don't do anything with unknown type schemes
         if version_scheme == "unknown":
+            logging.warning(f"unable to handle parsing for version: {version}")
             return None
 
         if version and (not less_than and not less_than_or_equal):
@@ -78,36 +161,21 @@ class VersionQualifier:
                 for c in components:
                     c = normalize(c)
                     if not c:
-                        break
+                        logging.warning(f"unable to handle parsing for version: {version}")
+                        return None
 
-                    if c.startswith(">="):
-                        version = normalize(c.removeprefix(">="))
-                    elif c.startswith("<="):
-                        less_than_or_equal = normalize(c.removeprefix("<="))
-                    elif c.endswith(" and earlier"):
-                        less_than_or_equal = normalize(c.removesuffix(" and earlier"))
-                    elif c.startswith("<"):
-                        less_than = normalize(c.removeprefix("<"))
-                    elif c.startswith("prior to "):
-                        less_than = normalize(c.removeprefix("prior to "))
-                    elif c.startswith("versions prior to "):
-                        less_than = normalize(c.removeprefix("versions prior to "))
-                    elif c.startswith("all versions prior to "):
-                        less_than = normalize(c.removeprefix("all versions prior to "))
-                    elif c.startswith("all versions up to cuda toolkit "):
-                        less_than = normalize(c.removeprefix("all versions up to cuda toolkit "))
-                    elif c.startswith("all versions up to "):
-                        less_than = normalize(c.removeprefix("all versions up to "))
-                if version and ((
-                    less_than_or_equal
-                    and (version.startswith("<=") or version.endswith(" and earlier"))
-                ) or (
-                    less_than
-                    and (
-                        version.startswith(
-                            ("<", "prior to ", "versions prior to ", "all versions prior to ", "all versions up to cuda toolkit ", "all versions up to "))  # noqa: E501
-                    )
-                )):
+                    c = normalize_version_constraint_chunk(c)
+                    if not c:
+                        logging.warning(f"unable to handle parsing for version: {version}")
+                        return None
+
+                    if c.startswith((">= ", "= ")):
+                        version = c
+                    elif c.startswith("<= "):
+                        less_than_or_equal = c
+                    elif c.startswith("< "):
+                        less_than = c
+                if version and (less_than_or_equal or less_than) and not version.startswith(("= ", ">=")):
                     version = None
 
         if version and (
@@ -116,14 +184,19 @@ class VersionQualifier:
         ):
             version = None
 
-        if version:
-            version = clean_version(version)
-
         if less_than:
-            less_than = clean_version(less_than.removeprefix("<"))
+            less_than = normalize(clean_version(less_than))
+
+            if not less_than:
+                logging.warning(f"unable to handle parsing for version: {version}")
+                return None
 
         if less_than_or_equal:
-            less_than_or_equal = clean_version(less_than_or_equal.removeprefix("<="))
+            less_than_or_equal = normalize(clean_version(less_than_or_equal))
+
+            if not less_than_or_equal:
+                logging.warning(f"unable to handle parsing for version: {version}")
+                return None
 
         if solutions and (less_than_or_equal and not less_than):
             for s in solutions:
@@ -135,6 +208,12 @@ class VersionQualifier:
                     less_than = fix_version.group(1)
                     less_than_or_equal = None
                     break
+
+        if version:
+            if version.startswith(">= ") and not less_than and not less_than_or_equal:
+                less_than_or_equal = ALL_VERSIONS
+
+            version = clean_version(version)
 
         if version and "," in version:
             logging.warning(f"unable to handle parsing for version: {version}")
@@ -153,11 +232,12 @@ class VersionQualifier:
 
         if version and version == ALL_VERSIONS and not less_than_or_equal and not less_than:
             less_than_or_equal = "*"
+            version = "0"
 
         # For consistency prefer <= * rather than < * for ranges with no upper bound
-        if less_than and less_than == ALL_VERSIONS:
-            less_than = None
-            less_than_or_equal = ALL_VERSIONS
+        # if less_than and less_than == ALL_VERSIONS:
+        #     less_than = None
+        #     less_than_or_equal = ALL_VERSIONS
 
         if not version:
             return None
