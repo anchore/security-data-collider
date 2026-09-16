@@ -158,6 +158,20 @@ class SpecFilesImporter:
                         p["product"] = product
 
                     match record_type:
+                        case "docker":
+                            package_name = r.get("package_name")
+                            if not package_name:
+                                self._logger.warning(f"Unable to import from {cve_id} due to missing packageName")
+                                return False
+                            if not collection_url or "docker.com" in collection_url or "docker.io" in collection_url:
+                                p["packageURL"] = f"pkg:docker/{package_name}"
+                                if collection_url:
+                                    p["collectionURL"] = "https://hub.docker.com"
+                            else:
+                                p["packageURL"] = f"pkg:docker/{package_name}?repository_url={quote(collection_url)}"
+                                p["collectionURL"] = collection_url
+
+                            p["packageName"] = package_name
                         case "jenkins-plugin":
                             group_id = r.get("group_id")
                             if not group_id:
