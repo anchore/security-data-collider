@@ -10,6 +10,7 @@ from urllib.parse import quote
 
 from packaging.utils import canonicalize_name
 
+from anchore_security_data_collider.providers.cve5.enriched.config import EnrichedDatasetConfig
 from anchore_security_data_collider.providers.cve5.identifier import parse_identifier
 from anchore_security_data_collider.utils import timer
 
@@ -20,8 +21,7 @@ manually_reconciled_cnas: set[str] = {
 }
 
 @dataclass(frozen=True, slots=True)
-class SpecFilesImporterConfig:
-    enriched_repo_root: str
+class SpecFilesImporterConfig(EnrichedDatasetConfig):
     spec_files_repo_root: str
 
 @dataclass(frozen=False, slots=True)
