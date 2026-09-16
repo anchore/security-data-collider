@@ -182,7 +182,9 @@ class VersionQualifier:
             (less_than and version == less_than)
             or (less_than_or_equal and version == less_than_or_equal)
         ):
-            version = None
+            #version = None
+            logging.warning(f"unable to handle parsing for version: {version}")
+            return None
 
         if less_than:
             less_than = normalize(clean_version(less_than))
