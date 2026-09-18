@@ -157,6 +157,8 @@ class SpecFilesImporter:
                     if product:
                         p["product"] = product
 
+                    p["defaultStatus"] = "unaffected"
+
                     match record_type:
                         case "docker":
                             package_name = r.get("package_name")
