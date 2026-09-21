@@ -71,8 +71,6 @@ class SpecFilesImporter:
             self._logger.warning(f"Skipping {cve_id_string} in {spec_path} due to error while parsing identifier")
             return False
 
-
-
         cve5_fragment_path = cve_id.filename(self._data_path)
         if not os.path.exists(cve5_fragment_path):
             self._logger.warning(f"{cve_id!s}: Skipping because no base fragment found at {cve5_fragment_path}.  Ensure you have synced the control data first and merged to the enriched dataset")  # noqa: E501
@@ -99,7 +97,7 @@ class SpecFilesImporter:
 
         # TODO: Figure out if there is a place for the disputed reasons per vendor
         # in CVE5 or BCP-5 or create an extension for this
-        disputed = cna_container.get("disputed")
+        disputed = nvd_spec.get("disputed")
         if disputed:
             mark_disputed = disputed.get("override", False)
             if mark_disputed and "disputed" not in cna_container["tags"]:
