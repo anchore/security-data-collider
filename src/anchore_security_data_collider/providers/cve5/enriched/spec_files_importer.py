@@ -252,6 +252,16 @@ class SpecFilesImporter:
 
                             p["packageName"] = f"{publisher}.{extension_name}"
                             p["collectionURL"] = r["collection_url"]
+                        case "cve5":
+                            cpes = r.get("cpe")
+                            if not cpes:
+                                return False
+
+                            package_name = r.get("package_name")
+                            collection_url = r.get("collection_url")
+                            if package_name and collection_url:
+                                p["packageName"] = package_name
+                                p["collectionURL"] = collection_url
                         case _:
                             # TODO: Handle other package types
                             return False
