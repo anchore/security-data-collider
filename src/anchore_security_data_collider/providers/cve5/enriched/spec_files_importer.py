@@ -71,6 +71,8 @@ class SpecFilesImporter:
             self._logger.warning(f"Skipping {cve_id_string} in {spec_path} due to error while parsing identifier")
             return False
 
+
+
         cve5_fragment_path = cve_id.filename(self._data_path)
         if not os.path.exists(cve5_fragment_path):
             self._logger.warning(f"{cve_id!s}: Skipping because no base fragment found at {cve5_fragment_path}.  Ensure you have synced the control data first and merged to the enriched dataset")  # noqa: E501
@@ -104,10 +106,9 @@ class SpecFilesImporter:
                 cna_container["tags"].append("disputed")
 
         # TODO: Figure out how to handle rejections that aren't rejected upstream
-        # rejected = cve.vuln.get("rejection")
-        # if rejected:
-        #     date = rejected.get("date")
-        #     reason = rejected.get("reason")
+        rejected = nvd_spec.get("rejection")
+        if rejected:
+            return False
 
         #     if date or reason:
         #         cve5["additionalMetadata"]["rejection"] = {}
@@ -119,8 +120,9 @@ class SpecFilesImporter:
         #         cve5["additionalMetadata"]["rejection"]["reason"] = reason
 
         # TODO: Figure out how to suppress
-        # suppression = cve.vuln.get("suppression")
-        # if suppression:
+        suppression = nvd_spec.get("suppression")
+        if suppression:
+            return False
         #     ignore = suppression["override"]
         #     if ignore:
         #         cve5["additionalMetadata"]["ignore"] = True
