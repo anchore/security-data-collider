@@ -30,6 +30,13 @@ class CVEReferenceIndex:
     index: int
     value: dict
 
+@dataclass(frozen=True, slots=True)
+class SpecFilesImporterOptions:
+    cves: list[str] | None = None
+    anchore_ids: list[str] | None = None
+    assigners: list[str] | None = None
+    batch_size: int | None = None
+
 def _construct_cpe(cpe: dict[str, str]) -> str:
     part = cpe.get("part", "a")
     vendor = cpe.get("vendor", "*")
@@ -66,7 +73,7 @@ class SpecFilesImporter:
 
         cve5_fragment_path = cve_id.filename(self._data_path)
         if not os.path.exists(cve5_fragment_path):
-            self._logger.warning(f"{cve_id!s}: Skipping because no base fragment found at {cve5_fragment_path}.  Ensure you have synced the control data first and merged to the enriched dataset")
+            self._logger.warning(f"{cve_id!s}: Skipping because no base fragment found at {cve5_fragment_path}.  Ensure you have synced the control data first and merged to the enriched dataset")  # noqa: E501
             return False
 
         with open(cve5_fragment_path) as fp:
@@ -208,7 +215,7 @@ class SpecFilesImporter:
                             if not package_name:
                                 self._logger.warning(f"Unable to import from {cve_id} due to missing packageName")
                                 return False
-                            npmjs_repo = "://registry.npmjs.org" in collection_url or "://www.npmjs.com/" in collection_url or "://npmjs.com/" in collection_url
+                            npmjs_repo = "://registry.npmjs.org" in collection_url or "://www.npmjs.com/" in collection_url or "://npmjs.com/" in collection_url  # noqa: E501
                             purl_package_name = quote(package_name)
                             if not collection_url or npmjs_repo:
                                 p["packageURL"] = f"pkg:npm/{purl_package_name}"
@@ -514,7 +521,7 @@ class SpecFilesImporter:
             json.dump(revised_cve_record, fp, ensure_ascii=False, indent=2, sort_keys=True)
         return True
 
-    def _process_spec_file(self, spec_file: str) -> int:
+    def _process_spec_file(self, spec_file: str, options: SpecFilesImporterOptions) -> int:  # noqa: C901
         try:
             with open(spec_file, "rb") as fp:
                 enriched = tomllib.load(fp)
@@ -524,10 +531,33 @@ class SpecFilesImporter:
                 logging.warning(f"Skipping {spec_file}.  No vulnerability data section found.")
                 return 0
 
+            anchore_id = vuln.get("id")
+            if options.anchore_ids and anchore_id not in options.anchore_ids:
+                return 0
+
             nvd_vuln = vuln.get("providers", {}).get("nvd", [])
             if not nvd_vuln:
                 logging.warning(f"Skipping {spec_file}.  No vuln.providers.nvd data section found.")
                 return 0
+
+            if options.assigners or options.cves:
+                found_cve = False
+                found_assigner = False
+                for cve_snapshot in enriched.get("snapshot", {}).get("cve5", []):
+                    cve_id = cve_snapshot.get("id")
+                    assigner = cve_snapshot.get("overview", {}).get("cna")
+
+                    if options.assigners and assigner in options.assigners:
+                        found_assigner = True
+                        break
+
+                    if options.cves and cve_id in options.cves:
+                        found_cve = True
+                        break
+
+                if (options.cves and not found_cve) or (options.assigners and not found_assigner):
+                    return 0
+
 
             updated_count = 0
             for n in nvd_vuln:
@@ -540,20 +570,20 @@ class SpecFilesImporter:
             self._logger.exception(f"Error processing {spec_file}")
             raise
 
-    def _process_import(self, cves: list[str] | None, anchore_ids: list[str] | None, batch_size: int | None):
+    def _process_import(self, options: SpecFilesImporterOptions):
         # TODO: implement logic to filter by cve id and/or anchore id
         batched_changes = 0
         for spec_file in iglob(os.path.join(self._config.spec_files_repo_root, "data/**/ANCHORE-*.toml"), recursive=True):
-            updated_count = self._process_spec_file(spec_file)
+            updated_count = self._process_spec_file(spec_file, options)
             batched_changes += updated_count
 
-            if batch_size and batched_changes >= batch_size:
-                self._logger.warning(f"Stopping for now as the update batch size of {batch_size} has been reached")
+            if options.batch_size and batched_changes >= options.batch_size:
+                self._logger.warning(f"Stopping for now as the update batch size of {options.batch_size} has been reached")
                 break
 
-    def import_(self, cves: list[str] | None, anchore_ids: list[str] | None, batch_size: int | None):
+    def import_(self, options: SpecFilesImporterOptions):
         if not self._ready():
             raise ValueError("Input data is not ready")
 
         with timer("importing improvements from vulnerability index spec files"):
-            self._process_import(cves, anchore_ids, batch_size)
+            self._process_import(options)
