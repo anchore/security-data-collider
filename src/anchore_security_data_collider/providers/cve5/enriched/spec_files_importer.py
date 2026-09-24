@@ -269,6 +269,11 @@ class SpecFilesImporter:
                             if package_name and collection_url:
                                 p["packageName"] = package_name
                                 p["collectionURL"] = collection_url
+
+                            if collection_url.startswith("https://github.com") and package_name:
+                                components = package_name.split("/")
+                                if len(components) == 2:
+                                    p["packageURL"] = f"pkg:github/{package_name}"
                         case _:
                             # TODO: Handle other package types
                             return False
