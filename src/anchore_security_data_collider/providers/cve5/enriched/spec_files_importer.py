@@ -270,7 +270,7 @@ class SpecFilesImporter:
                                 p["packageName"] = package_name
                                 p["collectionURL"] = collection_url
 
-                            if collection_url.startswith("https://github.com") and package_name:
+                            if collection_url and collection_url.startswith("https://github.com") and package_name:
                                 components = package_name.split("/")
                                 if len(components) == 2:
                                     p["packageURL"] = f"pkg:github/{package_name}"
