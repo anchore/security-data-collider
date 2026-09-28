@@ -167,53 +167,56 @@ class SpecFilesImporter:
                     p["defaultStatus"] = "unaffected"
 
                     match record_type:
-                        case "docker":
-                            package_name = r.get("package_name")
-                            if not package_name:
-                                self._logger.warning(f"Unable to import from {cve_id} due to missing packageName")
-                                return False
-                            if not collection_url or "docker.com" in collection_url or "docker.io" in collection_url:
-                                p["packageURL"] = f"pkg:docker/{package_name}"
-                                if collection_url:
-                                    p["collectionURL"] = "https://hub.docker.com"
-                            else:
-                                p["packageURL"] = f"pkg:docker/{package_name}?repository_url={quote(collection_url)}"
-                                p["collectionURL"] = collection_url
+                        # case "docker":
+                        #     package_name = r.get("package_name")
+                        #     if not package_name:
+                        #         self._logger.warning(f"Unable to import from {cve_id} due to missing packageName")
+                        #         return False
+                        #     if not collection_url or "docker.com" in collection_url or "docker.io" in collection_url:
+                        #         p["packageURL"] = f"pkg:docker/{package_name}"
+                        #         if collection_url:
+                        #             p["collectionURL"] = "https://hub.docker.com"
+                        #     else:
+                        #         p["packageURL"] = f"pkg:docker/{package_name}?repository_url={quote(collection_url)}"
+                        #         p["collectionURL"] = collection_url
 
-                            p["packageName"] = package_name
-                        case "jenkins-plugin":
-                            group_id = r.get("group_id")
-                            if not group_id:
-                                self._logger.warning(f"Unable to import from {cve_id} due to missing group_id")
-                                return False
-                            artifact_id = r.get("artifact_id")
-                            if not artifact_id:
-                                self._logger.warning(f"Unable to import from {cve_id} due to missing artifact_id")
-                                return False
-                            repository_url = collection_url
-                            if collection_url == "https://plugins.jenkins.io":
-                                repository_url = "https://repo.jenkins-ci.org/artifactory/releases"
-                                p["collectionURL"] = repository_url
-                            p["packageName"] = f"{group_id}:{artifact_id}"
-                            p["packageURL"] = f"pkg:maven/{group_id}/{artifact_id}?repository_url={quote(repository_url)}"
-                        case "maven":
-                            group_id = r.get("group_id")
-                            if not group_id:
-                                self._logger.warning(f"Unable to import from {cve_id} due to missing group_id")
-                                return False
-                            artifact_id = r.get("artifact_id")
-                            if not artifact_id:
-                                self._logger.warning(f"Unable to import from {cve_id} due to missing artifact_id")
-                                return False
-                            if not collection_url or collection_url.startswith("https://repo.maven.apache.org/maven2"):
-                                p["packageURL"] = f"pkg:maven/{group_id}/{artifact_id}"
-                            else:
-                                p["packageURL"] = f"pkg:maven/{group_id}/{artifact_id}?repository_url={quote(collection_url)}"
-                            p["packageName"] = f"{group_id}:{artifact_id}"
+                        #     p["packageName"] = package_name
+                        # case "jenkins-plugin":
+                        #     group_id = r.get("group_id")
+                        #     if not group_id:
+                        #         self._logger.warning(f"Unable to import from {cve_id} due to missing group_id")
+                        #         return False
+                        #     artifact_id = r.get("artifact_id")
+                        #     if not artifact_id:
+                        #         self._logger.warning(f"Unable to import from {cve_id} due to missing artifact_id")
+                        #         return False
+                        #     repository_url = collection_url
+                        #     if collection_url == "https://plugins.jenkins.io":
+                        #         repository_url = "https://repo.jenkins-ci.org/artifactory/releases"
+                        #         p["collectionURL"] = repository_url
+                        #     p["packageName"] = f"{group_id}:{artifact_id}"
+                        #     p["packageURL"] = f"pkg:maven/{group_id}/{artifact_id}?repository_url={quote(repository_url)}"
+                        # case "maven":
+                        #     group_id = r.get("group_id")
+                        #     if not group_id:
+                        #         self._logger.warning(f"Unable to import from {cve_id} due to missing group_id")
+                        #         return False
+                        #     artifact_id = r.get("artifact_id")
+                        #     if not artifact_id:
+                        #         self._logger.warning(f"Unable to import from {cve_id} due to missing artifact_id")
+                        #         return False
+                        #     if not collection_url or collection_url.startswith("https://repo.maven.apache.org/maven2"):
+                        #         p["packageURL"] = f"pkg:maven/{group_id}/{artifact_id}"
+                        #     else:
+                        #         p["packageURL"] = f"pkg:maven/{group_id}/{artifact_id}?repository_url={quote(collection_url)}"
+                        #     p["packageName"] = f"{group_id}:{artifact_id}"
                         case "npm":
                             package_name = r.get("package_name")
                             if not package_name:
                                 self._logger.warning(f"Unable to import from {cve_id} due to missing packageName")
+                                return False
+                            if "/" in package_name and not package_name.startswith("@"):
+                                self._logger.warning(f"Invalid npm package name {package_name} on {cve_id}")
                                 return False
                             npmjs_repo = "://registry.npmjs.org" in collection_url or "://www.npmjs.com/" in collection_url or "://npmjs.com/" in collection_url  # noqa: E501
                             purl_package_name = quote(package_name)
@@ -228,6 +231,11 @@ class SpecFilesImporter:
                             p["packageName"] = package_name
                         case "python":
                             package_name = r.get("package_name")
+
+                            if "/" in package_name:
+                                self._logger.warning(f"Invalid python package name {package_name} on {cve_id}")
+                                return False
+
                             if package_name:
                                 package_name = canonicalize_name(package_name)
                             if not package_name:
@@ -243,37 +251,42 @@ class SpecFilesImporter:
                                 p["collectionURL"] = collection_url
 
                             p["packageName"] = package_name
-                        case "vscode-extension":
-                            publisher = r["publisher"]
-                            extension_name = r["extension_name"]
-                            collection_url = r["collection_url"]
+                        # case "vscode-extension":
+                        #     publisher = r["publisher"]
+                        #     extension_name = r["extension_name"]
+                        #     collection_url = r["collection_url"]
 
-                            if not collection_url or "://marketplace.visualstudio.com" in collection_url:
-                                p["packageURL"] = f"pkg:vscode-extension/{publisher}/{extension_name}"
+                        #     if not collection_url or "://marketplace.visualstudio.com" in collection_url:
+                        #         p["packageURL"] = f"pkg:vscode-extension/{publisher}/{extension_name}"
 
-                                if collection_url:
-                                    p["collectionURL"] = collection_url
-                            else:
-                                p["packageURL"] = f"pkg:vscode-extension/{publisher}/{extension_name}?repository_url={quote(collection_url)}"
-                                p["collectionURL"] = collection_url
+                        #         if collection_url:
+                        #             p["collectionURL"] = collection_url
+                        #     else:
+                        #         p["packageURL"] = f"pkg:vscode-extension/{publisher}/{extension_name}?repository_url={quote(collection_url)}"
+                        #         p["collectionURL"] = collection_url
 
-                            p["packageName"] = f"{publisher}.{extension_name}"
-                            p["collectionURL"] = r["collection_url"]
-                        case "cve5":
-                            cpes = r.get("cpe")
-                            if not cpes:
-                                return False
+                        #     p["packageName"] = f"{publisher}.{extension_name}"
+                        #     p["collectionURL"] = r["collection_url"]
+                        # case "cve5":
+                        #     cpes = r.get("cpe")
+                        #     if not cpes:
+                        #         return False
 
+                        #     package_name = r.get("package_name")
+                        #     collection_url = r.get("collection_url")
+                        #     if package_name and collection_url:
+                        #         p["packageName"] = package_name
+                        #         p["collectionURL"] = collection_url
+
+                        #     if collection_url.startswith("https://github.com") and package_name:
+                        #         components = package_name.split("/")
+                        #         if len(components) == 2:
+                        #             p["packageURL"] = f"pkg:github/{package_name}"
+                        case "go-module":
                             package_name = r.get("package_name")
-                            collection_url = r.get("collection_url")
-                            if package_name and collection_url:
-                                p["packageName"] = package_name
-                                p["collectionURL"] = collection_url
-
-                            if collection_url.startswith("https://github.com") and package_name:
-                                components = package_name.split("/")
-                                if len(components) == 2:
-                                    p["packageURL"] = f"pkg:github/{package_name}"
+                            if package_name and (package_name.startswith("http") or "." not in package_name):
+                                self._logger.warning(f"Invalid go package name {package_name} on {cve_id}")
+                                return False
                         case _:
                             # TODO: Handle other package types
                             return False
@@ -519,7 +532,7 @@ class SpecFilesImporter:
 
         if cna in manually_reconciled_cnas:
             self._logger.warning(f"{cve_id!s}: Manual reconciliation needed for {cve_id}, cna: {cna}")
-            self._logger.warning(json.dumps(revised_cve_record, ensure_ascii=False, indent=2, sort_keys=True))
+            #self._logger.warning(json.dumps(revised_cve_record, ensure_ascii=False, indent=2, sort_keys=True))
             return False
 
         with open(cve5_fragment_path, "w") as fp:
