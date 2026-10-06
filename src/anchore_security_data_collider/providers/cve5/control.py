@@ -72,6 +72,10 @@ class ControlSetGenerator:
                 },
             }
 
+            title = cna.get("title")
+            if title:
+                fragments["containers"]["cna"]["title"] = title
+
             rejected_reasons = cna.get("rejectedReasons")
             if rejected_reasons:
                 fragments["containers"]["cna"]["rejectedReasons"] = rejected_reasons
