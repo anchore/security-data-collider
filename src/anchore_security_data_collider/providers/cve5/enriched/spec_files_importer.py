@@ -4,10 +4,13 @@ import os
 import tomllib
 from copy import deepcopy
 from dataclasses import dataclass
+from datetime import UTC, datetime
+from enum import StrEnum
 from glob import iglob
 from typing import Any
 from urllib.parse import quote
 
+import tomlkit
 from packaging.utils import canonicalize_name
 
 from anchore_security_data_collider.providers.cve5.enriched.config import EnrichedDatasetConfig
@@ -30,12 +33,18 @@ class CVEReferenceIndex:
     index: int
     value: dict
 
+class ProcessStatus(StrEnum):
+    SKIPPED = "skipped"
+    MODIFIED = "modified"
+    UNCHANGED = "unchanged"
+
 @dataclass(frozen=True, slots=True)
 class SpecFilesImporterOptions:
     cves: list[str] | None = None
     anchore_ids: list[str] | None = None
     assigners: list[str] | None = None
     batch_size: int | None = None
+    set_import_date: bool = False
 
 def _construct_cpe(cpe: dict[str, str]) -> str:
     part = cpe.get("part", "a")
@@ -61,20 +70,20 @@ class SpecFilesImporter:
 
         return os.path.exists(self._config.spec_files_repo_root)
 
-    def _process_nvd_spec(self, spec_path: str, nvd_spec: Any) -> bool:  # noqa: C901, PLR0911, PLR0912, PLR0915
+    def _process_nvd_spec(self, spec_path: str, nvd_spec: Any) -> ProcessStatus:  # noqa: C901, PLR0911, PLR0912, PLR0915
         cve_id_string = nvd_spec.get("id")
         if not cve_id_string:
-            return False
+            return ProcessStatus.SKIPPED
 
         cve_id = parse_identifier(cve_id_string)
         if not cve_id:
             self._logger.warning(f"Skipping {cve_id_string} in {spec_path} due to error while parsing identifier")
-            return False
+            return ProcessStatus.SKIPPED
 
         cve5_fragment_path = cve_id.filename(self._data_path)
         if not os.path.exists(cve5_fragment_path):
             self._logger.warning(f"{cve_id!s}: Skipping because no base fragment found at {cve5_fragment_path}.  Ensure you have synced the control data first and merged to the enriched dataset")  # noqa: E501
-            return False
+            return ProcessStatus.SKIPPED
 
         with open(cve5_fragment_path) as fp:
             original_cve_record = json.load(fp)
@@ -82,18 +91,18 @@ class SpecFilesImporter:
         cve_metadata = original_cve_record.get("cveMetadata")
         if not cve_metadata:
             self._logger.warning(f"{cve_id!s}: Skipping because no cveMetadata section found at {cve5_fragment_path}")
-            return False
+            return ProcessStatus.SKIPPED
 
         cna: str = cve_metadata.get("assignerShortName")
         if not cna:
             self._logger.warning(f"{cve_id!s}: Skipping because assignerShortName not present in cveMetadata section for {cve5_fragment_path}")
-            return False
+            return ProcessStatus.SKIPPED
 
         revised_cve_record = deepcopy(original_cve_record)
         cna_container = revised_cve_record.get("containers", {}).get("cna")
         if not cna_container:
             self._logger.warning(f"{cve_id!s}: Skipping because no cna container section found for {cve5_fragment_path}")
-            return False
+            return ProcessStatus.SKIPPED
 
         # TODO: Figure out if there is a place for the disputed reasons per vendor
         # in CVE5 or BCP-5 or create an extension for this
@@ -106,7 +115,7 @@ class SpecFilesImporter:
         # TODO: Figure out how to handle rejections that aren't rejected upstream
         rejected = nvd_spec.get("rejection")
         if rejected:
-            return False
+            return ProcessStatus.SKIPPED
 
         #     if date or reason:
         #         cve5["additionalMetadata"]["rejection"] = {}
@@ -120,7 +129,7 @@ class SpecFilesImporter:
         # TODO: Figure out how to suppress
         suppression = nvd_spec.get("suppression")
         if suppression:
-            return False
+            return ProcessStatus.SKIPPED
         #     ignore = suppression["override"]
         #     if ignore:
         #         cve5["additionalMetadata"]["ignore"] = True
@@ -171,7 +180,7 @@ class SpecFilesImporter:
                             package_name = r.get("package_name")
                             if not package_name:
                                 self._logger.warning(f"Unable to import from {cve_id} due to missing packageName")
-                                return False
+                                return ProcessStatus.SKIPPED
                             if not collection_url or "docker.com" in collection_url or "docker.io" in collection_url:
                                 p["packageURL"] = f"pkg:docker/{package_name}"
                                 if collection_url:
@@ -185,11 +194,11 @@ class SpecFilesImporter:
                             group_id = r.get("group_id")
                             if not group_id:
                                 self._logger.warning(f"Unable to import from {cve_id} due to missing group_id")
-                                return False
+                                return ProcessStatus.SKIPPED
                             artifact_id = r.get("artifact_id")
                             if not artifact_id:
                                 self._logger.warning(f"Unable to import from {cve_id} due to missing artifact_id")
-                                return False
+                                return ProcessStatus.SKIPPED
                             repository_url = collection_url
                             if collection_url == "https://plugins.jenkins.io":
                                 repository_url = "https://repo.jenkins-ci.org/artifactory/releases"
@@ -200,11 +209,11 @@ class SpecFilesImporter:
                             group_id = r.get("group_id")
                             if not group_id:
                                 self._logger.warning(f"Unable to import from {cve_id} due to missing group_id")
-                                return False
+                                return ProcessStatus.SKIPPED
                             artifact_id = r.get("artifact_id")
                             if not artifact_id:
                                 self._logger.warning(f"Unable to import from {cve_id} due to missing artifact_id")
-                                return False
+                                return ProcessStatus.SKIPPED
                             if not collection_url or collection_url.startswith("https://repo.maven.apache.org/maven2"):
                                 p["packageURL"] = f"pkg:maven/{group_id}/{artifact_id}"
                             else:
@@ -214,7 +223,7 @@ class SpecFilesImporter:
                             package_name = r.get("package_name")
                             if not package_name:
                                 self._logger.warning(f"Unable to import from {cve_id} due to missing packageName")
-                                return False
+                                return ProcessStatus.SKIPPED
                             npmjs_repo = "://registry.npmjs.org" in collection_url or "://www.npmjs.com/" in collection_url or "://npmjs.com/" in collection_url  # noqa: E501
                             purl_package_name = quote(package_name)
                             if not collection_url or npmjs_repo:
@@ -232,7 +241,7 @@ class SpecFilesImporter:
                                 package_name = canonicalize_name(package_name)
                             if not package_name:
                                 self._logger.warning(f"Unable to import from {cve_id} due to missing packageName")
-                                return False
+                                return ProcessStatus.SKIPPED
                             if not collection_url or "://pypi.org" in collection_url:
                                 p["packageURL"] = f"pkg:pypi/{package_name}"
 
@@ -262,7 +271,7 @@ class SpecFilesImporter:
                         case "cve5":
                             cpes = r.get("cpe")
                             if not cpes:
-                                return False
+                                return ProcessStatus.SKIPPED
 
                             package_name = r.get("package_name")
                             collection_url = r.get("collection_url")
@@ -276,7 +285,7 @@ class SpecFilesImporter:
                                     p["packageURL"] = f"pkg:github/{package_name}"
                         case _:
                             # TODO: Handle other package types
-                            return False
+                            return ProcessStatus.SKIPPED
                             #package_name = r.get("package_name")
                             #if package_name:
                             #    p["packageName"] = package_name
@@ -515,18 +524,31 @@ class SpecFilesImporter:
             revised_cve_record["containers"]["cna"]["affected"] = cve5_affected
 
         if original_cve_record == revised_cve_record:
-            return False
+            return ProcessStatus.UNCHANGED
 
         if cna in manually_reconciled_cnas:
             self._logger.warning(f"{cve_id!s}: Manual reconciliation needed for {cve_id}, cna: {cna}")
             self._logger.warning(json.dumps(revised_cve_record, ensure_ascii=False, indent=2, sort_keys=True))
-            return False
+            return ProcessStatus.SKIPPED
 
         with open(cve5_fragment_path, "w") as fp:
             json.dump(revised_cve_record, fp, ensure_ascii=False, indent=2, sort_keys=True)
-        return True
+        return ProcessStatus.MODIFIED
 
-    def _process_spec_file(self, spec_file: str, options: SpecFilesImporterOptions) -> int:  # noqa: C901
+    def set_import_date(self, spec_file: str):
+        with open(spec_file) as f:
+            self._logger.debug(f"Loading existing Anchore vulnerability data spec record for {spec_file}")
+            document = tomlkit.load(f)
+            if "curator" not in document:
+                document.append("curator", tomlkit.table())
+
+            if "anchore_cve5_enriched_import_date" not in document["curator"]:
+                document["curator"]["anchore_cve5_enriched_import_date"] = datetime.now(tz=UTC)
+
+        with open(spec_file, "w") as f:
+            tomlkit.dump(document, f, sort_keys=False)
+
+    def _process_spec_file(self, spec_file: str, options: SpecFilesImporterOptions) -> int:  # noqa: C901, PLR0912
         try:
             with open(spec_file, "rb") as fp:
                 enriched = tomllib.load(fp)
@@ -565,10 +587,17 @@ class SpecFilesImporter:
 
 
             updated_count = 0
+            all_ingested = True
             for n in nvd_vuln:
-                updated = self._process_nvd_spec(spec_file, n)
-                if updated:
+                status = self._process_nvd_spec(spec_file, n)
+                if status == ProcessStatus.MODIFIED:
                     updated_count += 1
+
+                if status == ProcessStatus.SKIPPED:
+                    all_ingested = False
+
+            if all_ingested and self.config.set_import_date:
+                self.set_import_date(spec_file)
 
             return updated_count
         except Exception:
