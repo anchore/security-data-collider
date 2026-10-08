@@ -288,6 +288,21 @@ class SpecFilesImporter:
                                 p["collectionURL"] = collection_url
 
                             p["packageName"] = package_name
+                        case "gem":
+                            package_name = r.get("package_name")
+                            if not package_name:
+                                self._logger.warning(f"Unable to import from {cve_id} due to missing packageName")
+                                return ProcessStatus.SKIPPED
+                            if not collection_url or "://rubygems.org" in collection_url:
+                                p["packageURL"] = f"pkg:gem/{package_name}"
+
+                                if "://rubygems.org" in collection_url:
+                                    p["collectionURL"] = "https://rubygems.org"
+                            else:
+                                p["packageURL"] = f"pkg:gem/{package_name}?repository_url={quote(collection_url)}"
+                                p["collectionURL"] = collection_url
+
+                            p["packageName"] = package_name
                         case "php-composer":
                             package_name = r.get("package_name")
                             if not package_name:
