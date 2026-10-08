@@ -288,6 +288,24 @@ class SpecFilesImporter:
                                 p["collectionURL"] = collection_url
 
                             p["packageName"] = package_name
+                        case "php-composer":
+                            package_name = r.get("package_name")
+                            if not package_name:
+                                self._logger.warning(f"Unable to import from {cve_id} due to missing packageName")
+                                return ProcessStatus.SKIPPED
+                            if len(package_name.split("/", maxsplit=1)) != 2:
+                                self._logger.warning(f"Unable to import from {cve_id} due to unlikely php-composer package name {package_name}")
+                                return ProcessStatus.SKIPPED
+                            if not collection_url or "://packagist.org" in collection_url:
+                                p["packageURL"] = f"pkg:composer/{package_name}"
+
+                                if "://packagist.org" in collection_url:
+                                    p["collectionURL"] = "https://packagist.org"
+                            else:
+                                p["packageURL"] = f"pkg:composer/{package_name}?repository_url={quote(collection_url)}"
+                                p["collectionURL"] = collection_url
+
+                            p["packageName"] = package_name
                         case "cve5":
                             cpes = r.get("cpe")
                             if not cpes:
