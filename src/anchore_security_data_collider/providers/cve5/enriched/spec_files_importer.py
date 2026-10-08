@@ -602,7 +602,7 @@ class SpecFilesImporter:
                 if status == ProcessStatus.SKIPPED:
                     all_ingested = False
 
-            if all_ingested and self.config.set_import_date:
+            if all_ingested and options.set_import_date:
                 self.set_import_date(spec_file)
 
             return updated_count
