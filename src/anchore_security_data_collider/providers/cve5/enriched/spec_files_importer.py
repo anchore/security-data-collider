@@ -43,6 +43,7 @@ class SpecFilesImporterOptions:
     cves: list[str] | None = None
     anchore_ids: list[str] | None = None
     assigners: list[str] | None = None
+    product_types: list[str] | None = None
     batch_size: int | None = None
     set_import_date: bool = False
 
@@ -70,7 +71,7 @@ class SpecFilesImporter:
 
         return os.path.exists(self._config.spec_files_repo_root)
 
-    def _process_nvd_spec(self, spec_path: str, nvd_spec: Any) -> ProcessStatus:  # noqa: C901, PLR0911, PLR0912, PLR0915
+    def _process_nvd_spec(self, spec_path: str, nvd_spec: Any, options: SpecFilesImporterOptions) -> ProcessStatus:  # noqa: C901, PLR0911, PLR0912, PLR0915
         cve_id_string = nvd_spec.get("id")
         if not cve_id_string:
             return ProcessStatus.SKIPPED
@@ -156,6 +157,10 @@ class SpecFilesImporter:
         patch_references: set[str] = set()
         if overrides:
             for record_type, records in overrides.items():
+                if options.product_types and record_type not in options.product_types:
+                    self._logger.debug(f"Skipping import from {cve_id} because product_type {record_type} was not in the filter set")
+                    return ProcessStatus.SKIPPED
+
                 for r in records:
                     p = {
                         "_index": r.get("_index", 999_999_999),
@@ -595,7 +600,7 @@ class SpecFilesImporter:
             updated_count = 0
             all_ingested = True
             for n in nvd_vuln:
-                status = self._process_nvd_spec(spec_file, n)
+                status = self._process_nvd_spec(spec_file, n, options)
                 if status == ProcessStatus.MODIFIED:
                     updated_count += 1
 
