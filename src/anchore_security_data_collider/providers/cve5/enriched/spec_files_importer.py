@@ -247,10 +247,10 @@ class SpecFilesImporter:
                             if not package_name:
                                 self._logger.warning(f"Unable to import from {cve_id} due to missing packageName")
                                 return ProcessStatus.SKIPPED
-                            if not collection_url or "://pypi.org" in collection_url:
+                            if not collection_url or "://pypi.org" in collection_url or "://pypi.python.org" in collection_url:
                                 p["packageURL"] = f"pkg:pypi/{package_name}"
 
-                                if "://pypi.org" in collection_url:
+                                if "://pypi.org" in collection_url or "://pypi.python.org" in collection_url:
                                     p["collectionURL"] = "https://pypi.org"
                             else:
                                 p["packageURL"] = f"pkg:pypi/{package_name}?repository_url={quote(collection_url)}"
@@ -273,6 +273,21 @@ class SpecFilesImporter:
 
                             p["packageName"] = f"{publisher}.{extension_name}"
                             p["collectionURL"] = r["collection_url"]
+                        case "rust-crate":
+                            package_name = r.get("package_name")
+                            if not package_name:
+                                self._logger.warning(f"Unable to import from {cve_id} due to missing packageName")
+                                return ProcessStatus.SKIPPED
+                            if not collection_url or "://crates.io" in collection_url:
+                                p["packageURL"] = f"pkg:cargo/{package_name}"
+
+                                if "://crates.io" in collection_url:
+                                    p["collectionURL"] = "https://crates.io"
+                            else:
+                                p["packageURL"] = f"pkg:cargo/{package_name}?repository_url={quote(collection_url)}"
+                                p["collectionURL"] = collection_url
+
+                            p["packageName"] = package_name
                         case "cve5":
                             cpes = r.get("cpe")
                             if not cpes:
