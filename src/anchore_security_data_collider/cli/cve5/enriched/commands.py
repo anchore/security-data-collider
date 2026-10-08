@@ -28,6 +28,7 @@ def group(_: Application):
 @click.option("--anchore-id", multiple=True, help="Specific ANCHORE- ids to import enrichment data for", required=False)
 @click.option("--cve", multiple=True, help="Specific CVEs to import enrichment data for", required=False)
 @click.option("--assigner", multiple=True, help="Specific CVE assigners (CNAs) tom import data for", required=False)
+@click.option("--product-type", multiple=True, help="Product type records to consider for import", required=False)
 @click.option("--batch-size", help="Import batch size", type=int, required=False)
 @click.option("--set-import-date/--no-set-import-date", default=False)
 @click.pass_obj
@@ -38,6 +39,7 @@ def import_from_specs(  # noqa: PLR0913, PLR0917
     anchore_id: list[str] | None = None,
     cve: list[str] | None = None,
     assigner: list[str] | None = None,
+    product_type: list[str] | None = None,
     batch_size: int | None = None,
     set_import_date: bool = False,
 ) -> None:
@@ -50,6 +52,7 @@ def import_from_specs(  # noqa: PLR0913, PLR0917
             cves=cve,
             anchore_ids=anchore_id,
             assigners=assigner,
+            product_types=product_type,
             batch_size=batch_size,
             set_import_date=set_import_date,
         ),
