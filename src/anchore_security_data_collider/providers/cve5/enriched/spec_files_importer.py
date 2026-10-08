@@ -331,6 +331,7 @@ class SpecFilesImporter:
                         for affected_record in affected:
                             a = affected_record["version"]
                             v = {
+                                "_index": affected_record.get("_index", 999_999_999),
                                 "status": "affected",
                             }
                             less_than = a.get("less_than")
@@ -393,9 +394,10 @@ class SpecFilesImporter:
 
                     unaffected = r.get("unaffected", [])
                     if unaffected:
-                        for a in unaffected:
-                            a = a["version"]
+                        for unaffected_record in unaffected:
+                            a = unaffected_record["version"]
                             v = {
+                                "_index": unaffected_record.get("_index", 999_999_999),
                                 "status": "unaffected",
                             }
                             less_than = a.get("less_than")
@@ -429,9 +431,10 @@ class SpecFilesImporter:
 
                     investigating = r.get("investigating", [])
                     if investigating:
-                        for a in investigating:
-                            a = a["version"]
+                        for investigating_record in investigating:
+                            a = investigating_record["version"]
                             v = {
+                                "_index": investigating_record.get("_index", 999_999_999),
                                 "status": "unknown",
                             }
                             less_than = a.get("less_than")
@@ -464,6 +467,9 @@ class SpecFilesImporter:
                             versions.append(v)
 
                     if versions:
+                        versions = sorted(versions, key=lambda v: v["_index"])
+                        for version in versions:
+                            del version["_index"]
                         p["versions"] = versions
 
                     # Create the additional jenkins-plugin registry record
@@ -596,7 +602,7 @@ class SpecFilesImporter:
                 if status == ProcessStatus.SKIPPED:
                     all_ingested = False
 
-            if all_ingested and self.config.set_import_date:
+            if all_ingested and options.set_import_date:
                 self.set_import_date(spec_file)
 
             return updated_count
