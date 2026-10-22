@@ -55,6 +55,13 @@ style = "semver"
 trusted-publishing = "always"
 exclude-newer = "1 week"
 
+# Temporarily bypass the cooldown for certifi and uv due to the emSign/eMudhra CA key compromise
+# https://github.com/advisories/GHSA-6q48-6c7w-9gw2 (certifi)
+# https://github.com/advisories/GHSA-hq85-5cpj-mr62 (uv)
+exclude-newer-package = { certifi = "2026-10-21T00:00:00Z", uv = "2026-10-21T00:00:00Z" }
+constraint-dependencies = ["certifi>=2026.10.19", "uv>=0.13.4"]
+required-version = ">=0.13.4"
+
 [[tool.uv.index]]
 explicit = true
 name = "testpypi"
