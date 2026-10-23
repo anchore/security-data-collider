@@ -77,6 +77,4 @@ class CVE5Snapshotter:
                     ],
                 }, f, ensure_ascii=False, indent=2, sort_keys=True)
 
-            self._logger.info("git add data")
-            self._logger.info(f'git commit -s -m "snapshot from https://github.com/{self._github_repo}/commits/{commit}"')
-            self._logger.info("git push origin main")
+            self._logger.info(f"snapshot from https://github.com/{self._github_repo}/commit/{commit}")
