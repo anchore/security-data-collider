@@ -106,7 +106,7 @@ class ControlSetGenerator:
                     {
                         "snapshots": [
                             {
-                                "repo": "https://github.com/anchore/dataset-security-cve5-upstream",
+                                "repo": "https://github.com/anchore/dataset-security-cve5-upstream-snapshot",
                                 "commit": cve5_snapshot_commit,
                             },
                         ],
